@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Zjištění dostupné verze PHP
+PHP_VERSION=$(apt-cache policy php | grep -m 1 'Candidate:' | awk '{print $2}' | cut -d ':' -f 2 | cut -d '+' -f 1 | cut -d '.' -f 1-2)
+
+# Nastavení PHP konfigurace
+PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
+
+# Dotaz na zobrazení chyb
+read -p "Chcete zobrazovat chyby? (y/n) [pro vývojové prostředí povolit, pro produkční zakázat]: " show_errors
+
+# Záloha původního konfiguračního souboru
+sudo cp "$PHP_INI" "${PHP_INI}.bak"
+
+# Úprava konfigurace (například zvýšení limitu paměti a maximálního uploadu)
+sudo sed -i 's/^;memory_limit = .*/memory_limit = 256M/' "$PHP_INI"
+sudo sed -i 's/^;upload_max_filesize = .*/upload_max_filesize = 1G/' "$PHP_INI"
+sudo sed -i 's/^;post_max_size = .*/post_max_size = 1G/' "$PHP_INI"
+
+# Nastavení časového pásma
+sudo sed -i 's/^;date.timezone = .*/date.timezone = "Europe/Prague"/' "$PHP_INI"
+
+# Zobrazení chyb na základě uživatelského vstupu
+if [[ "$show_errors" == "y" ]]; then
+    sudo sed -i 's/^;display_errors = .*/display_errors = On/' "$PHP_INI"
+else
+    sudo sed -i 's/^display_errors = .*/display_errors = Off/' "$PHP_INI"
+fi
+
+# Zabezpečení
+sudo sed -i 's/^;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/' "$PHP_INI"
+
+# Restartování PHP-FPM
+sudo systemctl restart php${PHP_VERSION}-fpm
+
+echo "PHP bylo úspěšně nakonfigurováno a služba PHP-FPM byla restartována."

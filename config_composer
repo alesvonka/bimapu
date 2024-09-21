@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Kontrola, zda je Composer nainstalován
+if ! command -v composer &> /dev/null; then
+    echo "Composer není nainstalován. Instalace bude pokračovat..."
+else
+    echo "Composer je již nainstalován."
+    exit 0
+fi
+
+# Dotaz na GitHub uživatelské jméno
+read -p "Zadejte své GitHub uživatelské jméno: " GITHUB_USERNAME
+
+# Dotaz na GitHub token
+read -p "Zadejte svůj GitHub token pro autentizaci: " GITHUB_TOKEN
+
+# Ověření tokenu
+response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/user")
+
+if [ "$response" -eq 200 ]; then
+    echo "Token je platný. Uživatelské jméno: $GITHUB_USERNAME."
+else
+    echo "Token není platný nebo uživatel neexistuje. Instalace byla zrušena."
+    exit 1
+fi
+
+# Nastavení globálního umístění pro Composer
+COMPOSER_HOME="$HOME/.config/composer"
+
+# Vytvoření složky pro Composer, pokud neexistuje
+sudo mkdir -p "$COMPOSER_HOME"
+
+# Základní konfigurace pro Composer
+cat <<EOL > "$COMPOSER_HOME/config.json"
+{
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist"
+    },
+    "github-oauth": {
+        "github.com": "$GITHUB_TOKEN"
+    },
+    "username": "$GITHUB_USERNAME"
+}
+EOL
+
+echo "Composer byl úspěšně nakonfigurován."

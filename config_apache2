@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# Nastavení skupiny www-data pro aktulního uživatele
+sudo usermod -aG www-data $(whoami)
+# Aktualizace skupiny www-data
+newgrp www-data
+
+# Zjištění dostupné verze PHP
+PHP_VERSION=$(apt-cache policy php | grep -m 1 'Candidate:' | awk '{print $2}' | cut -d ':' -f 2 | cut -d '+' -f 1 | cut -d '.' -f 1-2)
+
+# Dotaz na název localhost
+read -p "Zadejte ServerName pro localhost (výchozí je 'localhost'): " LOCALHOST_NAME
+LOCALHOST_NAME=${LOCALHOST_NAME:-localhost}  # Pokud není zadán, použije se 'localhost'
+
+# Nastavení výchozí složky pro www soubory
+WEB_ROOT="/var/www/html"  # Zde můžeš změnit výchozí složku
+
+# Povolení potřebných modulů
+sudo a2enmod rewrite
+sudo a2enmod proxy
+sudo a2enmod proxy_fcgi
+
+# Konfigurace souboru Apache
+APACHE_CONF="/etc/apache2/sites-available/000-default.conf"
+APACHE_SSL_CONF="/etc/apache2/sites-available/default-ssl.conf"
+
+# Záloha původního konfiguračního souboru
+sudo cp "$APACHE_CONF" "${APACHE_CONF}.bak"
+
+# Přidání základní konfigurace do souboru
+cat <<EOL | sudo tee "$APACHE_CONF"
+<VirtualHost *:80>
+    ServerName $LOCALHOST_NAME
+    DocumentRoot $WEB_ROOT
+    <Directory $WEB_ROOT>
+        AllowOverride All
+        Options Indexes
+        DirectoryIndex index.php index.html index.htm index.cgi index.pl index.php5 index.php7
+    </Directory>
+
+    # Konfigurace pro PHP-FPM
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/php/php${PHP_VERSION}-fpm.sock|fcgi://localhost/"
+    </FilesMatch>
+
+    # Redirect na HTTPS
+    Redirect permanent / https://$LOCALHOST_NAME/
+</VirtualHost>
+EOL
+
+# Dotaz na SSL
+read -p "Chcete povolit SSL na portu 443? (y/n): " enable_ssl
+if [[ "$enable_ssl" == "y" ]]; then
+    # Aktivace SSL modulu
+    sudo a2enmod ssl
+
+    # Dotazy na údaje pro certifikát
+    read -p "Zadejte název pro certifikát (např. localhost): " cert_name
+    read -p "Zadejte název společnosti: " org_name
+    read -p "Zadejte název jednotky (např. IT): " unit_name
+    read -p "Zadejte město: " city_name
+    read -p "Zadejte stát (např. CZ): " state_name
+    read -p "Zadejte země (např. CZ): " country_name
+    read -p "Zadejte e-mail (pro upozornění): " email_address
+
+    # Vytvoření self-signed certifikátu
+    sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "/etc/ssl/private/${cert_name}.key" \
+        -out "/etc/ssl/certs/${cert_name}.crt" \
+        -subj "/CN=$cert_name/O=$org_name/OU=$unit_name/L=$city_name/ST=$state_name/C=$country_name/emailAddress=$email_address"
+
+    # Přidání konfigurace SSL do Apache
+    sudo cp "$APACHE_SSL_CONF" "${APACHE_SSL_CONF}.bak"
+    cat <<EOL | sudo tee "$APACHE_SSL_CONF"
+<IfModule mod_ssl.c>
+    <VirtualHost _default_:443>
+        DocumentRoot $WEB_ROOT
+        ServerName $LOCALHOST_NAME
+
+        SSLEngine on
+        SSLCertificateFile /etc/ssl/certs/${cert_name}.crt
+        SSLCertificateKeyFile /etc/ssl/private/${cert_name}.key
+
+        <Directory $WEB_ROOT>
+            AllowOverride All
+            Options Indexes
+            DirectoryIndex index.php index.html index.htm index.cgi index.pl index.php5 index.php7
+        </Directory>
+
+        # Konfigurace pro PHP-FPM
+        <FilesMatch \.php$>
+            SetHandler "proxy:unix:/run/php/php${PHP_VERSION}-fpm.sock|fcgi://localhost/"
+        </FilesMatch>
+    </VirtualHost>
+</IfModule>
+EOL
+
+    # Nastavení oprávnění pro SSL konfigurační soubor
+    sudo chown www-data:www-data "$APACHE_SSL_CONF"
+    sudo chmod 664 "$APACHE_SSL_CONF"
+    # Symlink na konfigurační soubor
+    sudo ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/default-ssl.conf
+
+    echo "SSL bylo úspěšně nakonfigurováno. Certifikát a klíč byly uloženy."
+fi
+
+# Nastavení vlastnictví a oprávnění složky
+sudo chown -R www-data:www-data "$WEB_ROOT"
+sudo chmod -R 775 "$WEB_ROOT"
+
+# Nastavení konfiguračního souboru do skupiny www-data
+sudo chown www-data:www-data "$APACHE_CONF"
+sudo chmod 664 "$APACHE_CONF"
+
+# Restartování Apache
+sudo systemctl restart apache2
+
+echo "Apache byl úspěšně nakonfigurován pro použití PHP-FPM, prioritizaci souborů a povolení webového náhledu souborů. Služba byla restartována."

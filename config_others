@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Nastavení pro ostatní konfigurace
+
+# Instalace UFW, pokud není nainstalován
+if ! command -v ufw >/dev/null 2>&1; then
+    echo "Instaluji UFW..."
+    sudo apt-get install -y ufw
+else
+    echo "UFW je již nainstalován."
+fi
+
+# Povolujeme základní porty
+echo "Povolujeme základní porty v firewallu..."
+sudo ufw allow 80       # Povoluje HTTP (port 80)
+sudo ufw allow 443      # Povoluje HTTPS (port 443)
+sudo ufw allow OpenSSH  # Povoluje SSH (port 22)
+sudo ufw allow 3306     # Povoluje MariaDB
+sudo ufw allow 5432     # Povoluje PostgreSQL (pokud bude potřeba v budoucnu)
+sudo ufw allow 1883     # Povoluje MQTT (nešifrovaný)
+sudo ufw allow 8883     # Povoluje MQTT (šifrovaný)
+sudo ufw allow 21       # Povoluje FTP (port 21)
+
+# Aktivace firewallu
+sudo ufw enable
+echo "Firewall byl aktivován a základní porty byly povoleny."
+
+# Kontrola, zda systém neběží z SD karty
+if [[ $(df / | grep mmcblk0) ]]; then
+    echo "Systém běží z SD karty, swap soubor nebude vytvořen."
+else
+    # Nastavení swap souboru (pokud je potřeba)
+    SWAPFILE="/swapfile"
+    if [ ! -f "$SWAPFILE" ]; then
+        echo "Vytvářím swap soubor..."
+        sudo fallocate -l 1G "$SWAPFILE"
+        sudo chmod 600 "$SWAPFILE"
+        sudo mkswap "$SWAPFILE"
+        sudo swapon "$SWAPFILE"
+        echo "$SWAPFILE none swap sw 0 0" | sudo tee -a /etc/fstab
+        echo "Swap byl úspěšně vytvořen a povolen."
+    else
+        echo "Swap soubor již existuje."
+    fi
+fi
+
+# Zjištění výchozí složky pro Apache
+APACHE_ROOT=$(grep -i 'DocumentRoot' /etc/apache2/sites-available/000-default.conf | awk '{print $2}')
+
+# Vytvoření index.php a phpinfo.php
+echo "Vytvářím index.php a phpinfo.php ve složce $APACHE_ROOT..."
+cat <<EOF | sudo tee "$APACHE_ROOT/index.php"
+<?php
+echo "<h1>Seznam souborů a složek:</h1>";
+echo "<ul>";
+foreach (scandir('.') as \$item) {
+    if (\$item != '.' && \$item != '..') {
+        echo "<li><a href='\$item'>\$item</a></li>";
+    }
+}
+echo "</ul>";
+?>
+EOF
+
+# Vytvoření phpinfo.php
+echo "<?php phpinfo();" | sudo tee "$APACHE_ROOT/phpinfo.php"
+
+# Stáhnutí posledního adminera
+ADMINER_DIR="$APACHE_ROOT/adminer"
+sudo mkdir -p "$ADMINER_DIR"
+echo "Stahuji poslední verzi Adminer..."
+sudo wget -q -O "$ADMINER_DIR/adminer.php" "https://www.adminer.org/latest.php"
+
+# Vytvoření index.php pro adminer
+cat <<EOF | sudo tee "$ADMINER_DIR/index.php"
+<?php
+header("Location: adminer.php");
+exit;
+?>
+EOF
+
+# Nastavení opračení pro složku
+sudo chown -R "www-data:www-data $APACHE_ROOT"
+sudo find "$APACHE_ROOT" -type d -exec chmod 775 {} \;  # Pro složky
+sudo find "$APACHE_ROOT" -type f -exec chmod 664 {} \;  # Pro soubory
+
+echo "Soubory index.php a phpinfo.php byly úspěšně vytvořeny."
+echo "Adminer byl stažen do složky adminer."
+echo "Ostatní konfigurace byly úspěšně provedeny."

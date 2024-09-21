@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Dotaz na nastavení hesla pro root uživatele
+read -p "Zadejte heslo pro root uživatele MariaDB: " MYSQL_ROOT_PASSWORD
+
+# Dotaz na uživatelské jméno
+read -p "Zadejte uživatelské jméno pro nového uživatele (např. root): " USER_NAME
+
+# Dotaz na heslo pro nového uživatele
+read -p "Zadejte heslo pro uživatele $USER_NAME: " USER_PASSWORD
+
+# Instalace MariaDB
+sudo apt-get install -y mariadb-server
+
+# Zabezpečení instalace
+sudo mysql_secure_installation <<EOF
+
+$MYSQL_ROOT_PASSWORD
+n
+y
+$MYSQL_ROOT_PASSWORD
+$MYSQL_ROOT_PASSWORD
+y
+n
+y
+y
+EOF
+
+# Vytvoření uživatele s přístupem ze všech IP adres
+sudo mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOF
+CREATE USER '$USER_NAME'@'%' IDENTIFIED BY '$USER_PASSWORD';
+GRANT ALL PRIVILEGES ON *.* TO '$USER_NAME'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EOF
+
+echo "MariaDB byla úspěšně nakonfigurována. Uživatel $USER_NAME byl vytvořen s přístupem z jakékoli IP adresy."
