@@ -10,10 +10,10 @@ PHP_VERSION=$(apt-cache policy php | grep -m 1 'Candidate:' | awk '{print $2}' |
 
 # Dotaz na název localhost
 read -p "Zadejte ServerName pro localhost (výchozí je 'localhost'): " LOCALHOST_NAME
-LOCALHOST_NAME=${LOCALHOST_NAME:-localhost}  # Pokud není zadán, použije se 'localhost'
+LOCALHOST_NAME=${LOCALHOST_NAME:-localhost} # Pokud není zadán, použije se 'localhost'
 
 # Nastavení výchozí složky pro www soubory
-WEB_ROOT="/var/www/html"  # Zde můžeš změnit výchozí složku
+WEB_ROOT="/var/www/html" # Zde můžeš změnit výchozí složku
 
 # Povolení potřebných modulů
 sudo a2enmod rewrite
