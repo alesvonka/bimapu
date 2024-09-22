@@ -42,9 +42,6 @@ cat <<EOL | sudo tee "$APACHE_CONF"
     <FilesMatch \.php$>
         SetHandler "proxy:unix:/run/php/php${PHP_VERSION}-fpm.sock|fcgi://localhost/"
     </FilesMatch>
-
-    # Redirect na HTTPS
-    Redirect permanent / https://$LOCALHOST_NAME/
 </VirtualHost>
 EOL
 
@@ -60,7 +57,7 @@ if [[ "$enable_ssl" == "y" ]]; then
     read -p "Zadejte název jednotky (např. IT): " unit_name
     read -p "Zadejte město: " city_name
     read -p "Zadejte stát (např. CZ): " state_name
-    read -p "Zadejte země (např. CZ): " country_name
+    read -p "Zadejte zemi (např. CZ): " country_name
     read -p "Zadejte e-mail (pro upozornění): " email_address
 
     # Vytvoření self-signed certifikátu
@@ -95,13 +92,16 @@ if [[ "$enable_ssl" == "y" ]]; then
 </IfModule>
 EOL
 
+    # Přidání redirectu na HTTPS do konfigurace portu 80
+    sudo sed -i '/<\/VirtualHost>/i \    # Redirect na HTTPS\n    Redirect permanent / https://'"$LOCALHOST_NAME"'/' "$APACHE_CONF"
+
     # Nastavení oprávnění pro SSL konfigurační soubor
     sudo chown www-data:www-data "$APACHE_SSL_CONF"
     sudo chmod 664 "$APACHE_SSL_CONF"
     # Symlink na konfigurační soubor
     sudo ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/default-ssl.conf
 
-    echo "SSL bylo úspěšně nakonfigurováno. Certifikát a klíč byly uloženy."
+    echo "SSL bylo úspěšně nakonfigurováno. Certifikát a klíč byly uloženy a redirect byl přidán."
 fi
 
 # Nastavení vlastnictví a oprávnění složky
@@ -115,4 +115,4 @@ sudo chmod 664 "$APACHE_CONF"
 # Restartování Apache
 sudo systemctl restart apache2
 
-echo "Apache byl úspěšně nakonfigurován pro použití PHP-FPM, prioritizaci souborů a povolení webového náhledu souborů. Služba byla restartována."
+echo "Apache byl úspěšně nakonfigurován pro použití PHP-FPM a případné SSL. Služba byla restartována."
