@@ -52,7 +52,6 @@ if [[ "$enable_ssl" == "y" ]]; then
     sudo a2enmod ssl
 
     # Dotazy na údaje pro certifikát
-    read -p "Zadejte název pro certifikát (např. localhost): " cert_name
     read -p "Zadejte název společnosti: " org_name
     read -p "Zadejte název jednotky (např. IT): " unit_name
     read -p "Zadejte město: " city_name
@@ -62,9 +61,9 @@ if [[ "$enable_ssl" == "y" ]]; then
 
     # Vytvoření self-signed certifikátu
     sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "/etc/ssl/private/${cert_name}.key" \
-        -out "/etc/ssl/certs/${cert_name}.crt" \
-        -subj "/CN=$cert_name/O=$org_name/OU=$unit_name/L=$city_name/ST=$state_name/C=$country_name/emailAddress=$email_address"
+        -keyout "/etc/ssl/private/${LOCALHOST_NAME}.key" \
+        -out "/etc/ssl/certs/${LOCALHOST_NAME}.crt" \
+        -subj "/CN=$LOCALHOST_NAME/O=$org_name/OU=$unit_name/L=$city_name/ST=$state_name/C=$country_name/emailAddress=$email_address"
 
     # Přidání konfigurace SSL do Apache
     sudo cp "$APACHE_SSL_CONF" "${APACHE_SSL_CONF}.bak"
@@ -75,8 +74,8 @@ if [[ "$enable_ssl" == "y" ]]; then
         ServerName $LOCALHOST_NAME
 
         SSLEngine on
-        SSLCertificateFile /etc/ssl/certs/${cert_name}.crt
-        SSLCertificateKeyFile /etc/ssl/private/${cert_name}.key
+        SSLCertificateFile /etc/ssl/certs/${LOCALHOST_NAME}.crt
+        SSLCertificateKeyFile /etc/ssl/private/${LOCALHOST_NAME}.key
 
         <Directory $WEB_ROOT>
             AllowOverride All
